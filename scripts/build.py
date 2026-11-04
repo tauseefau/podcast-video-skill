@@ -1,16 +1,41 @@
 """Generate index.html + compositions/<scene>.html from script.json and assets/lines.json (run make_voice.py first).
 Run from the HyperFrames project folder. Output is plain HyperFrames HTML: edit it in Studio, or edit script.json and re-run."""
-import html, json, os
+import array, html, json, os, subprocess
 
 L = json.load(open("assets/lines.json"))
 S = json.load(open("script.json"))
 CREDITS = json.load(open("assets/img/credits.json")) if os.path.exists("assets/img/credits.json") else {}
 TOTAL = L["total"]
-SCENES = S["scenes"]  # scene id -> {kicker, title, sub, source}; the last scene carries subscribe + credits
+SCENES = S["scenes"]  # scene id -> {kicker, title, icon, sub, source}; the last scene carries subscribe + credits
+ICON_AT = 0.45  # seconds into a scene, once the wipe has cleared
+WIPES = [("xPercent", -100), ("yPercent", -100), ("xPercent", 100)]  # rotated so transitions don't all look alike
 
 missing = [f"assets/img/{sc}.jpg" for sc in SCENES if not os.path.exists(f"assets/img/{sc}.jpg")]
-assert not missing, f"add a background image for each scene: {missing}"
+missing += [f"assets/icons/{c['icon']}.svg" for c in SCENES.values() if not os.path.exists(f"assets/icons/{c['icon']}.svg")]
+missing += [f for f in ("assets/sfx/whoosh.mp3", "assets/sfx/pop.mp3") if not os.path.exists(f)]
+assert not missing, f"missing assets, see SKILL.md: {missing}"
 assert {l["who"] for l in L["lines"]} <= set(S["voices"]), "a line uses a voice missing from script.json"
+
+
+
+def pcm(path):
+    return array.array("h", subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-f", "s16le", "-ac", "1", "-ar", "8000", "-"],
+                                           capture_output=True, check=True).stdout)
+
+
+def hit(path):
+    """(seconds until the loudest 10 ms, duration), so a sound can land on its picture."""
+    a = pcm(path)
+    env = [sum(abs(x) for x in a[i:i + 80]) for i in range(0, len(a), 80)]
+    return round(env.index(max(env)) * 0.01, 3), round(len(a) / 8000, 3)
+
+
+# three pitches of one whoosh, so repeats don't sound identical
+TAKES = ["assets/sfx/whoosh.mp3"]
+for n, rate in ((2, 0.84), (3, 1.16)):
+    TAKES.append(f"assets/sfx/whoosh{n}.mp3")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", TAKES[0], "-af", f"asetrate=44100*{rate},aresample=44100", TAKES[-1]], check=True)
+HITS = {t: hit(t) for t in TAKES + ["assets/sfx/pop.mp3"]}
 
 order = list(dict.fromkeys(l["scene"] for l in L["lines"]))
 assert order == list(SCENES), f"scene order mismatch: {order}"
@@ -22,6 +47,7 @@ for i, sc in enumerate(order):
     bounds[sc] = (start, round(end - start, 3))
 
 esc = html.escape
+svg = lambda sc: open(f"assets/icons/{SCENES[sc]['icon']}.svg").read()
 os.makedirs("compositions", exist_ok=True)
 
 for sc, scene in SCENES.items():
@@ -57,7 +83,7 @@ for sc, scene in SCENES.items():
                f'    tl.to("#{p}-sub-btn .subbtn-in", {{scale: 1.06, duration: 0.6, ease: "sine.inOut", yoyo: true, repeat: {max(0, int((dur - b - 1) / 0.6))}}}, {b + 0.5});',
                f'    tl.fromTo("#{p}-team .chip", {{opacity: 0, y: 20}}, {{opacity: 1, y: 0, duration: 0.4, ease: "power3.out", stagger: 0.15}}, {t});']
         names = " · ".join(sorted({c["artist"] for c in CREDITS.values()}))
-        photos = f" · Photos: {esc(names)}" if names else ""
+        photos = (f" · Photos: {esc(names)}" if names else "") + " · Icons: Lucide (ISC)"
         credit += f'    <p id="{p}-credit" class="clip credit" data-start="0.2" data-duration="{dur - 0.2:.3f}">Voices generated locally with VoiceStudio{photos}</p>'
     src = f'      <p class="src">{esc(scene["source"])}</p>' if scene.get("source") else ""
     subp = f'      <p class="sub" id="{p}-sub">{esc(sub)}</p>' if sub else ""
@@ -69,6 +95,8 @@ for sc, scene in SCENES.items():
     #{sc} .bug {{ position: absolute; left: 140px; top: 96px; font: 700 22px Inter; letter-spacing: .28em; text-transform: uppercase; color: #f6efe6; opacity: .85; }}
     #{sc} .bug i {{ display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #ff4d4d; margin-right: 14px; vertical-align: 2px; }}
     #{sc} .card {{ position: absolute; left: 140px; top: 300px; width: 1050px; }}
+    #{sc} .icon {{ position: absolute; left: 140px; top: 176px; width: 96px; height: 96px; border-radius: 50%; background: #ffb27a; color: #14100d; display: flex; align-items: center; justify-content: center; }}
+    #{sc} .icon svg {{ width: 56px; height: 56px; }}
     #{sc} .kicker {{ font: 700 26px Inter; letter-spacing: .22em; text-transform: uppercase; color: #ffb27a; margin-bottom: 26px; }}
     #{sc} h1 {{ font: 700 92px/1.04 "Playfair Display", serif; letter-spacing: -.01em; }}
     #{sc} .sub {{ font: 400 36px/1.4 Inter; margin-top: 30px; color: #e9dfd2; max-width: 980px; }}
@@ -91,6 +119,7 @@ for sc, scene in SCENES.items():
     <img id="{p}-bg" class="bg" src="assets/img/{sc}.jpg" alt="" />
     <div class="shade"></div>
     <div class="bug"><i></i>{esc(S["show"])}</div>
+    <div id="{p}-icon" class="icon">{svg(sc)}</div>
     <div id="{p}-card" class="card">
       <p class="kicker" id="{p}-kicker">{esc(kicker)}</p>
       <h1 id="{p}-title">{esc(title)}</h1>
@@ -107,13 +136,48 @@ for sc, scene in SCENES.items():
     tl.fromTo("#{p}-kicker", {{opacity: 0, y: 24}}, {{opacity: 1, y: 0, duration: 0.5, ease: "power3.out"}}, 0.2);
     tl.fromTo("#{p}-title", {{opacity: 0, y: 40}}, {{opacity: 1, y: 0, duration: 0.7, ease: "power3.out"}}, 0.35);
 {f'    tl.fromTo("#{p}-sub", {{opacity: 0, y: 24}}, {{opacity: 1, y: 0, duration: 0.6, ease: "power3.out"}}, 0.75);' if sub else ""}
+    tl.fromTo("#{p}-icon", {{opacity: 0, scale: 0.4}}, {{opacity: 1, scale: 1, duration: 0.45, ease: "back.out(2.5)"}}, {ICON_AT});
 {chr(10).join(js)}
     window.__timelines["{sc}"] = tl;
   </script>
 </template>
 ''')
 
+# one full-frame wipe per topic change: covers the frame on the cut, in the colour of whoever speaks next
+seams = [bounds[sc][0] for sc in order[1:]]
+panels, wjs, sfx = [], [], []
+for i, (sc, at) in enumerate(zip(order[1:], seams)):
+    axis, frm = WIPES[i % len(WIPES)]
+    who = next(l["who"] for l in L["lines"] if l["scene"] == sc)
+    panels.append(f'    <div id="wipe{i}" class="panel" style="background:{S["voices"][who]["color"]}">{svg(sc)}</div>')
+    wjs += [f'    tl.set("#wipe{i}", {{{axis}: {frm}}}, 0);',
+            f'    tl.to("#wipe{i}", {{{axis}: 0, duration: 0.28, ease: "power3.in"}}, {round(at - 0.28, 3)});',
+            f'    tl.to("#wipe{i}", {{{axis}: {-frm}, duration: 0.32, ease: "power3.out"}}, {round(at + 0.06, 3)});']
+    take = TAKES[i % 3]
+    sfx.append(f'''      <audio id="wh{i}" class="clip" src="{take}" data-start="{max(0, round(at + 0.033 - HITS[take][0], 3))}" data-duration="{HITS[take][1]}" data-volume="0.6" data-track-index="90"></audio>''')
+for i, sc in enumerate(order):  # pop peaks as the icon's scale-up overshoots
+    pk, d = HITS["assets/sfx/pop.mp3"]
+    sfx.append(f'''      <audio id="pop{i}" class="clip" src="assets/sfx/pop.mp3" data-start="{max(0, round(bounds[sc][0] + ICON_AT + 0.15 - pk, 3))}" data-duration="{d}" data-volume="0.5" data-track-index="91"></audio>''')
+open("compositions/wipes.html", "w").write(f'''<template>
+  <style>
+    #wipes {{ position: absolute; inset: 0; overflow: hidden; }}
+    #wipes .panel {{ position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #14100d; }}
+    #wipes .panel svg {{ width: 220px; height: 220px; }}
+  </style>
+  <div id="wipes" data-composition-id="wipes" data-width="1920" data-height="1080" data-layout-allow-overflow>
+{chr(10).join(panels)}
+  </div>
+  <script>
+    const tl = gsap.timeline({{ paused: true }});
+{chr(10).join(wjs)}
+    tl.set({{}}, {{}}, {TOTAL});
+    window.__timelines["wipes"] = tl;
+  </script>
+</template>
+''')
+
 hosts = "\n".join(f'''      <div id="{sc}" data-composition-id="{sc}" data-composition-src="compositions/{sc}.html" data-start="{bounds[sc][0]}" data-duration="{bounds[sc][1]}" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>''' for sc in order)
+hosts += f'''\n      <div id="wipes" data-composition-id="wipes" data-composition-src="compositions/wipes.html" data-start="0" data-duration="{TOTAL}" data-track-index="80" data-track-kind="graphics" data-width="1920" data-height="1080" style="z-index: 10"></div>'''
 audios = "\n".join(f'''      <audio id="vo{i:02d}" class="clip" src="{l["src"]}" data-start="{l["start"]}" data-duration="{l["duration"]}" data-track-index="{list(S["voices"]).index(l["who"]) + 2}"></audio>''' for i, l in enumerate(L["lines"]))
 open("index.html", "w").write(f'''<!doctype html>
 <html lang="en">
@@ -131,6 +195,7 @@ open("index.html", "w").write(f'''<!doctype html>
     <div id="root" data-composition-id="main" data-start="0" data-duration="{TOTAL}" data-width="1920" data-height="1080">
 {hosts}
 {audios}
+{chr(10).join(sfx)}
     </div>
     <script>
       window.__timelines = window.__timelines || {{}};

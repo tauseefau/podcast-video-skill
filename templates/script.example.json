@@ -1,6 +1,10 @@
 {
   "show": "My Show",
-  "chips": ["Script · Claude", "Voices · VoiceStudio", "Video · HyperFrames"],
+  "chips": [
+    "Script · Claude",
+    "Voices · VoiceStudio",
+    "Video · HyperFrames"
+  ],
   "voices": {
     "sam": {
       "name": "Sam",
@@ -21,17 +25,31 @@
     "intro": {
       "kicker": "Podcast · My Show",
       "title": "Why every small shop needs a website",
+      "icon": "message-circle",
       "sub": "A two-minute conversation"
     },
     "outro": {
       "kicker": "My Show",
       "title": "Subscribe for more episodes",
+      "icon": "bell",
       "sub": "Made with Claude + HyperFrames"
     }
   },
   "lines": [
-    { "who": "sam", "scene": "intro", "text": "Welcome to the show. Today I'm with Maria, who runs a small flower shop." },
-    { "who": "maria", "scene": "intro", "text": "Thanks for having me. Most of my customers still find me by walking past." },
-    { "who": "sam", "scene": "outro", "text": "Thanks for listening, and subscribe for more episodes." }
+    {
+      "who": "sam",
+      "scene": "intro",
+      "text": "Welcome to the show. Today I'm with Maria, who runs a small flower shop."
+    },
+    {
+      "who": "maria",
+      "scene": "intro",
+      "text": "Thanks for having me. Most of my customers still find me by walking past."
+    },
+    {
+      "who": "sam",
+      "scene": "outro",
+      "text": "Thanks for listening, and subscribe for more episodes."
+    }
   ]
 }
