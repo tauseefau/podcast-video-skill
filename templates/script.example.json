@@ -1,0 +1,37 @@
+{
+  "show": "My Show",
+  "chips": ["Script · Claude", "Voices · VoiceStudio", "Video · HyperFrames"],
+  "voices": {
+    "sam": {
+      "name": "Sam",
+      "role": "Host",
+      "color": "#4fd1c5",
+      "instruct": "male, young adult, moderate pitch, british accent",
+      "seed": 11
+    },
+    "maria": {
+      "name": "Maria",
+      "role": "Guest",
+      "color": "#ff8a3d",
+      "instruct": "female, middle-aged, moderate pitch, american accent",
+      "seed": 7
+    }
+  },
+  "scenes": {
+    "intro": {
+      "kicker": "Podcast · My Show",
+      "title": "Why every small shop needs a website",
+      "sub": "A two-minute conversation"
+    },
+    "outro": {
+      "kicker": "My Show",
+      "title": "Subscribe for more episodes",
+      "sub": "Made with Claude + HyperFrames"
+    }
+  },
+  "lines": [
+    { "who": "sam", "scene": "intro", "text": "Welcome to the show. Today I'm with Maria, who runs a small flower shop." },
+    { "who": "maria", "scene": "intro", "text": "Thanks for having me. Most of my customers still find me by walking past." },
+    { "who": "sam", "scene": "outro", "text": "Thanks for listening, and subscribe for more episodes." }
+  ]
+}

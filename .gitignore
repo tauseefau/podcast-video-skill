@@ -1,0 +1,7 @@
+.env
+docker-compose.yml
+renders/
+assets/
+*.mp4
+*.wav
+__pycache__/
